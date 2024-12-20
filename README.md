@@ -1,4 +1,4 @@
-# [IEEE-TITS] Deep LSTM Embedded MPC for CAV Car-Following Control
+# [IEEE-TITS] A Deep Long Short-Term Memory Network Embedded Model Predictive Control Strategies for Car-Following Control of Connected Automated Vehicles in Mixed Traffic
 
 This repository contains the implementation of the research presented in the paper:
 
