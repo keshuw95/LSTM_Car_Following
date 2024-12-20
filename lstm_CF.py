@@ -304,8 +304,8 @@ def evaluate_model(model_path, X_test, y_test, scale, device):
 
 # Main Function
 def main():
-    # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    device = torch.device("mps" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("mps" if torch.cuda.is_available() else "cpu")
     
     input_time_dim, output_time_dim = 50, 80
     n_leader = 2
