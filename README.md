@@ -1,12 +1,13 @@
-Code for ``A Deep Long Short-Term Memory Network Embedded Model Predictive Control Strategies for Car-Following Control of Connected Automated Vehicles in Mixed Traffic''
+# [IEEE-TITS] Deep LSTM Embedded MPC for CAV Car-Following Control
 
-@ARTICLE{10562212,
-  author={Zhou, Yang and Zhang, Zhen and Ding, Fan and Ahn, Soyoung and Wu, Keshu and Ran, Bin},
-  journal={IEEE Transactions on Intelligent Transportation Systems}, 
-  title={A Deep Long Short-Term Memory Network Embedded Model Predictive Control Strategies for Car-Following Control of Connected Automated Vehicles in Mixed Traffic}, 
-  year={2024},
-  volume={25},
-  number={7},
-  pages={8209-8220},
-  keywords={Trajectory;Predictive models;Prediction algorithms;Long short term memory;Deep learning;Data models;Vehicle trajectory prediction;deep long short term memory;deep learning embedded model predictive control;connected automated vehicles;car-following control},
-  doi={10.1109/TITS.2024.3412329}}
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![DOI](https://img.shields.io/badge/DOI-10.1109/TITS.2024.3412329-green)
+
+## Overview
+
+This repository contains the implementation of the research presented in the paper:
+
+> **"A Deep Long Short-Term Memory Network Embedded Model Predictive Control Strategies for Car-Following Control of Connected Automated Vehicles in Mixed Traffic"**  
+> Published in *IEEE Transactions on Intelligent Transportation Systems (T-ITS)*, 2024  
+> [DOI: 10.1109/TITS.2024.3412329](https://doi.org/10.1109/TITS.2024.3412329)
+
