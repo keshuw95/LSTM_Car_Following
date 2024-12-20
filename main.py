@@ -320,7 +320,7 @@ def main():
     print("Start training...")
     model, train_hist, test_hist = train_model(model, model_name, trainloader, valloader, epoch, l_r, scale, model_path, device)
     
-    # print("Start evaluation...")
+    print("Start evaluation...")
     predictions, actuals = evaluate_model(model_path, model_name, X_test, y_test, scale, device)
 
 if __name__ == "__main__":
