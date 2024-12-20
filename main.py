@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import torch
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
-from sklearn.preprocessing import MinMaxScaler
 import os
+from model import LSTM_model
 
 
 # 1. Data Loading
@@ -134,14 +134,14 @@ def preprocess_data(files, input_time_dim=30, output_time_dim=50, n_leader=2, le
     y_test = C_out[split_line2:,:,M:]
 
 
-    X_train = torch.tensor(X_train)
-    y_train = torch.tensor(y_train)
+    X_train = torch.tensor(X_train, dtype=torch.float32)
+    y_train = torch.tensor(y_train, dtype=torch.float32)
 
-    X_val = torch.tensor(X_val)
-    y_val = torch.tensor(y_val)
+    X_val = torch.tensor(X_val, dtype=torch.float32)
+    y_val = torch.tensor(y_val, dtype=torch.float32)
 
-    X_test = torch.tensor(X_test)
-    y_test = torch.tensor(y_test)
+    X_test = torch.tensor(X_test, dtype=torch.float32)
+    y_test = torch.tensor(y_test, dtype=torch.float32)
 
     # print(X_train.shape, y_train.shape, X_val.shape, y_val.shape, X_test.shape, y_test.shape)
     data = X_train, y_train, X_val, y_val, X_test, y_test, scale
@@ -163,45 +163,9 @@ class MyDataset(Dataset):
         return self.x[index], self.y[index]
 
 
-# 4. Define LSTM Model
-class LSTM_model(nn.Module):
-    def __init__(self, n_features, n_hidden, n_veh, n_out, n_layers, batch_size, device):
-        super(LSTM_model, self).__init__()
-
-        self.n_hidden = n_hidden
-        self.n_layers = n_layers
-        self.batch_size = batch_size
-        self.n_out = n_out
-        self.n_features = n_features
-        self.n_veh = n_veh
-        self.n_hidden_fc = 256
-
-        self.lstm = nn.LSTM(
-          input_size=n_features,
-          hidden_size=n_hidden,
-          num_layers=n_layers,
-          dropout=0,
-          batch_first=True
-        )
-
-        self.linear = nn.Linear(in_features=self.n_hidden, out_features=self.n_out*self.n_veh)
-
-        self.device = device
-
-    def forward(self, sequences):
-        x = sequences.permute(0,2,1)
-        h0 = torch.zeros(self.n_layers, x.shape[0], self.n_hidden).to(self.device)
-        c0 = torch.zeros(self.n_layers, x.shape[0], self.n_hidden).to(self.device)
-        lstm_out, (h_out, c0) = self.lstm(x, (h0, c0))
-        h_out = h_out[0].view(-1, self.n_hidden)
-        y_pred = self.linear(h_out)
-        y_pred = y_pred.view(-1, self.n_veh, self.n_out)
-        return y_pred
-
-
-# 5. Training Loop
+# 4. Training Loop
 def train_model(
-    model, trainloader, valloader, epoch, l_r, M, n, scale, n_leader, model_path, device
+    model, model_name, trainloader, valloader, epoch, l_r, scale, model_path, device
 ):
     model = model.to(device)
     
@@ -228,6 +192,7 @@ def train_model(
             batch_x = batch_x.to(device)
             batch_y = batch_y.to(device)
 
+
             y_pred = model.forward(batch_x)
             loss = loss_fn(y_pred, batch_y)
 
@@ -241,12 +206,16 @@ def train_model(
             if valloader is not None:
                 with torch.no_grad():
                     
+                    model.eval()
+
                     y_val_pred_list = []
                     y_val_true_list = []
                     for batch_x_val, batch_y_val in valloader:
                         batch_x_val = batch_x_val.to(device)
                         batch_y_val = batch_y_val.to(device)
+                        
                         y_val_pred = model(batch_x_val)
+
                         y_val_true_list.append(batch_y_val)
                         y_val_pred_list.append(y_val_pred)
                     Y_val_true = torch.cat(y_val_true_list)
@@ -277,28 +246,41 @@ def train_model(
     return model.eval(), train_hist, val_hist
 
 
-# 6. Evaluation
-def evaluate_model(model_path, X_test, y_test, scale, device):
+# 5. Evaluation
+def evaluate_model(model_path, model_name, X_test, y_test, scale, device):
     """Evaluate the trained model."""
-    model = torch.load(model_path)
+    model = torch.load(model_path, weights_only=False)
     model = model.to(device)
     model.eval()
     X_test = X_test.to(device)
     y_test = y_test.to(device)
 
     y_test_pred = model(X_test).cpu().detach().numpy()
+    
     y_test_true = y_test.cpu().detach().numpy()
 
     rmse = np.sqrt(np.mean(np.square(y_test_pred*scale - y_test_true*scale)))
     print("Testing RMSE:", rmse)
 
+    v_num = y_test_true.shape[1]
+    labels = ['leader '+str(int(v+1)) for v in range(v_num-1)]
+    labels.append('follower')
+    linestyles = ['-', '--', '-.', ':']
+    colors_gt = ['green' for v in range(v_num-1)]
+    colors_gt.append('blue')
+    colors_pred = ['orange' for v in range(v_num-1)]
+    colors_pred.append('red')
+
     for i in range(1):
-        plt.figure(figsize=(5,3))
-        plt.plot(y_test_true[i,:]*scale)
-        plt.plot(y_test_pred[i,:]*scale)
-        plt.ylabel('Longitudial Position(m)')
+        fig = plt.figure(figsize=(8,5))
+        for j in range(y_test_true.shape[1]):
+            plt.plot(y_test_true[i,j,:]*scale, color=colors_gt[j], label='Ground Truth - '+labels[j], linestyle=linestyles[j])
+            plt.plot(y_test_pred[i,j,:]*scale, color=colors_pred[j], label='Prediction - '+labels[j], linestyle=linestyles[j])
+        plt.ylabel('Longitudial Position (m)')
         plt.xlabel('Time (0.1s)')
+        plt.legend()
         plt.show()
+        fig.savefig('output/eval_'+str(i)+'.png', dpi=300)
     return y_test_pred, y_test_true
 
 
@@ -309,6 +291,8 @@ def main():
     
     input_time_dim, output_time_dim = 50, 80
     n_leader = 2
+
+    model_name = 'LSTM'
 
     print("Preprocessing data...")
     # Dataset and DataLoader setup
@@ -322,20 +306,22 @@ def main():
     valloader = torch.utils.data.DataLoader(valdata, batch_size=512, shuffle=True)
 
     n_features = X_train.shape[1]
+    print(X_train.shape)
     n_veh = y_train.shape[1]
-    model = LSTM_model(n_features=n_features, n_hidden=128, n_veh=n_veh, n_out=output_time_dim, n_layers=2, batch_size=512, device=device)
 
+    model = LSTM_model(n_features=n_features, n_hidden=256, n_veh=n_veh, n_out=output_time_dim, n_layers=2, device=device)
+    
     epoch = 100
     l_r = 5e-4
 
-    os.makedirs("model/CF_leader="+str(n_leader), exist_ok=True)
-    model_path = 'model/CF_leader='+str(n_leader)+"/model_M=" + str(input_time_dim) + "_N=" + str(output_time_dim) + ".pt"
+    os.makedirs("/CF_leader="+str(n_leader), exist_ok=True)
+    model_path = 'model/CF_leader='+str(n_leader)+"/"+model_name+"_M=" + str(input_time_dim) + "_N=" + str(output_time_dim) + ".pt"
 
     print("Start training...")
-    model, train_hist, test_hist = train_model(model, trainloader, valloader, epoch, l_r, input_time_dim, output_time_dim, scale, n_leader, model_path, device)
+    model, train_hist, test_hist = train_model(model, model_name, trainloader, valloader, epoch, l_r, scale, model_path, device)
     
     # print("Start evaluation...")
-    predictions, actuals = evaluate_model(model_path, X_test, y_test, scale, device)
+    predictions, actuals = evaluate_model(model_path, model_name, X_test, y_test, scale, device)
 
 if __name__ == "__main__":
     main()
