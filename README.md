@@ -101,26 +101,7 @@ To enforce physically plausible movement, we introduce a velocity constraint ter
 
 ---
 
-## 3. Installation & Setup
-### **Dependencies**
-Ensure you have the following installed:
-```bash
-pip install numpy pandas torch matplotlib
-```
-
-### **Running the Models**
-- **Train the position-based model:**
-  ```bash
-  python main.py
-  ```
-- **Train the speed-based model:**
-  ```bash
-  python main_speed.py
-  ```
-
----
-
-## 4. Evaluation
+## 3. Evaluation
 The models generate plots comparing predicted and actual trajectories. Evaluation metrics include:
 - **Root Mean Squared Error (RMSE)** for position accuracy:
   ```math
@@ -130,7 +111,7 @@ The models generate plots comparing predicted and actual trajectories. Evaluatio
 
 ---
 
-## 5. Platoon Data Processing (`platoon_data_processing/`)
+## 4. Platoon Data Processing (`platoon_data_processing/`)
 ### **Description**
 This module processes vehicle trajectory data from the **NGSIM dataset** to extract platoons of connected vehicles. The extracted platoon data serves as input for training and evaluating car-following models.
 
@@ -154,3 +135,24 @@ To process the raw data and extract platoons, run the Jupyter notebook:
 jupyter notebook platoon_data_processing/platoon_data_processing.ipynb
 ```
 The processed data will be saved in the `processed_data/` folder and can be used for training car-following models.
+
+
+---
+
+## 5. Installation & Setup
+### **Dependencies**
+Ensure you have the following installed:
+```bash
+pip install numpy pandas torch matplotlib
+```
+
+### **Running the Models**
+- **Train the position-based model:**
+  ```bash
+  python main.py
+  ```
+- **Train the speed-based model:**
+  ```bash
+  python main_speed.py
+  ```
+  
