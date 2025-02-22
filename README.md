@@ -53,10 +53,6 @@ To enforce physically plausible movement, we introduce a velocity constraint ter
   ```math
   \mathcal{L}_{\text{velocity}} = \lambda \sum_{t=1}^{N-1} \max(0, -v_t)^2
   ```
-- Compute acceleration for additional smoothness:
-  ```math
-  a_t = \frac{v_{t+1} - v_t}{\Delta t}
-  ```
 - Final loss function:
   ```math
   \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{MSE}} + \lambda \mathcal{L}_{\text{velocity}}
