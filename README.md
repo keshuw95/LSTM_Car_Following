@@ -57,13 +57,9 @@ To enforce physically plausible movement, we introduce a velocity constraint ter
   ```math
   a_t = \frac{v_{t+1} - v_t}{\Delta t}
   ```
-- Include acceleration regularization:
-  ```math
-  \mathcal{L}_{\text{acceleration}} = \gamma \sum_{t=1}^{N-2} a_t^2
-  ```
 - Final loss function:
   ```math
-  \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{MSE}} + \lambda \mathcal{L}_{\text{velocity}} + \gamma \mathcal{L}_{\text{acceleration}}
+  \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{MSE}} + \lambda \mathcal{L}_{\text{velocity}}
   ```
 
 ### **Model Architecture (`model.py`)**
