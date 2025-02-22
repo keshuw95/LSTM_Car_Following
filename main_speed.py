@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
 import os
-from model import LSTM_model
+from model_speed import LSTM_model
 
 
 # 1. Data Loading
@@ -101,53 +101,52 @@ def preprocess_data(files, input_time_dim=30, output_time_dim=50, n_leader=2, le
     os.makedirs('output', exist_ok=True)
     id_df.to_csv('output/vehicle_id.csv', index=False)
 
-    # 3-vehcle platoon: L1-L2-F
-    S1 = X_L1 - X_L2 # spacing between L1 and L2
-    S2 = X_L2 - X_F # spacing between L2 and F
-    V_d1 = V_L1 - V_L2 # speed difference between L1 and L2
-    V_d2 = V_L2 - V_F # speed difference between L2 and F
-    V1 = V_L1 # speed of L1
-    V2 = V_L2 # speed of L2
-    V3 = V_F # speed of F
 
+    # Compute input features (unchanged)
+    S1 = X_L1 - X_L2  # Spacing between L1 and L2
+    S2 = X_L2 - X_F  # Spacing between L2 and F
+    V_d1 = V_L1 - V_L2  # Speed difference (L1, L2)
+    V_d2 = V_L2 - V_F  # Speed difference (L2, F)
+    V1 = V_L1  # Speed of L1
+    V2 = V_L2  # Speed of L2
+    V3 = V_F  # Speed of F
+    
+    # Modify output to be speed instead of position
     if n_leader == 2:
         C_in = np.stack([S1, S2, V_d1, V_d2, V1, V2, V3], axis=1)
-        C_out = np.stack([X_L1, X_L2, X_F],axis=1)
-        # C_out = np.stack([V_L1, V_L2, V_F],axis=1)
+        C_out_pos = np.stack([X_L1, X_L2, X_F],axis=1)
+        C_out = np.stack([V_L1, V_L2, V_F],axis=1)
     else:
         C_in = np.stack([S2, V_d2, V2, V3], axis=1)
-        C_out = np.stack([X_L2, X_F],axis=1)
-        # C_out = np.stack([V_L2, V_F],axis=1)
-
-    C_out = C_out - (np.ones(C_out.shape)*C_out[:,0:1,0:1])
-
+        C_out_pos = np.stack([X_L2, X_F],axis=1)
+        C_out = np.stack([V_L2, V_F],axis=1)
+    
+    initial_positions = C_out_pos[:,:3, M:M+1]
+    # Normalize C_out (speed)
     scale = np.max(C_out)
-    C_out = (C_out)/scale
-
-    # C_in = np.array(C_in, dtype=np.float32)
-    # C_out = np.array(C_out, dtype=np.float32)
-
+    C_out = C_out / scale
+    
+    # Train-validation-test split remains unchanged
     X_train = C_in[:split_line1,:,:M]
     X_val = C_in[split_line1:split_line2,:,:M]
     X_test = C_in[split_line2:,:,:M]
-
+    
     y_train = C_out[:split_line1,:,M:]
     y_val = C_out[split_line1:split_line2,:,M:]
     y_test = C_out[split_line2:,:,M:]
-
-
+    
+    print(initial_positions.shape, '...')
+    initial_positions = initial_positions[split_line2:,:]
+    
+    # Convert to PyTorch tensors
     X_train = torch.tensor(X_train, dtype=torch.float32)
     y_train = torch.tensor(y_train, dtype=torch.float32)
-
     X_val = torch.tensor(X_val, dtype=torch.float32)
     y_val = torch.tensor(y_val, dtype=torch.float32)
-
     X_test = torch.tensor(X_test, dtype=torch.float32)
     y_test = torch.tensor(y_test, dtype=torch.float32)
-
-    # print(X_train.shape, y_train.shape, X_val.shape, y_val.shape, X_test.shape, y_test.shape)
-    data = X_train, y_train, X_val, y_val, X_test, y_test, scale
-    return data
+    
+    return X_train, y_train, X_val, y_val, X_test, y_test, scale, initial_positions
 
 
 # 3. Define Dataset Class
@@ -163,31 +162,11 @@ class MyDataset(Dataset):
 
     def __getitem__(self, index):
         return self.x[index], self.y[index]
-    
-
-# Loss Calculation Function
-def compute_loss(y_pred, batch_y, loss_fn, lambda_v, delta_t):
-    """Computes the total loss including MSE and velocity consistency."""
-    # Standard MSE Loss
-    mse_loss = loss_fn(y_pred, batch_y)
-    
-    # Compute velocity
-    v_pred = (y_pred[:, :, 1:] - y_pred[:, :, :-1]) / delta_t
-    v_gt = (batch_y[:, :, 1:] - batch_y[:, :, :-1]) / delta_t
-
-    # Velocity consistency loss (penalizing negative velocities)
-    velocity_loss = torch.mean(torch.clamp(-v_pred, min=0) ** 2)
-    
-    
-    # Total loss
-    total_loss = mse_loss + lambda_v * velocity_loss
-    
-    return total_loss, mse_loss
 
 
 # 4. Training Loop
 def train_model(
-    model, model_name, trainloader, valloader, epoch, l_r, scale, model_path, device, lambda_v=1.0, delta_t=0.1
+    model, model_name, trainloader, valloader, epoch, l_r, scale, model_path, device
 ):
     model = model.to(device)
     
@@ -216,10 +195,10 @@ def train_model(
 
 
             y_pred = model.forward(batch_x)
-            total_loss, mse_loss = compute_loss(y_pred, batch_y, loss_fn, lambda_v, delta_t)
-            
-            total_loss.backward(retain_graph=True)
-            loss_ = loss_fn(y_pred * scale, batch_y * scale)
+            loss = loss_fn(y_pred, batch_y)
+
+            loss.backward(retain_graph=True)
+            loss_ = loss_fn(y_pred*scale, batch_y*scale)
             loss_epoch.append(loss_.item())
             
             optimiser.step()
@@ -237,8 +216,7 @@ def train_model(
                         batch_y_val = batch_y_val.to(device)
                         
                         y_val_pred = model(batch_x_val)
-                        total_val_loss, _ = compute_loss(y_val_pred, batch_y_val, loss_fn, lambda_v, delta_t)
-                        
+
                         y_val_true_list.append(batch_y_val)
                         y_val_pred_list.append(y_val_pred)
                     Y_val_true = torch.cat(y_val_true_list)
@@ -270,42 +248,47 @@ def train_model(
 
 
 # 5. Evaluation
-def evaluate_model(model_path, model_name, X_test, y_test, scale, device):
-    """Evaluate the trained model."""
+def evaluate_model(model_path, model_name, X_test, y_test, scale, initial_positions, device):
+    """Evaluate the trained model, integrating speed to recover position."""
     model = torch.load(model_path, weights_only=False)
     model = model.to(device)
     model.eval()
+    
     X_test = X_test.to(device)
     y_test = y_test.to(device)
-
-    y_test_pred = model(X_test).cpu().detach().numpy()
     
+    y_test_pred = model(X_test).cpu().detach().numpy()
     y_test_true = y_test.cpu().detach().numpy()
+    
+    #  Cumulative sum over time axis (dim=2)
+    dt = 0.1  # Time step
+    y_test_pred_position = np.cumsum(y_test_pred * scale * dt, axis=2) + initial_positions
+    y_test_true_position = np.cumsum(y_test_true * scale * dt, axis=2) + initial_positions
 
-    rmse = np.sqrt(np.mean(np.square(y_test_pred*scale - y_test_true*scale)))
-    print("Testing RMSE:", rmse)
-
+    # Compute RMSE based on position
+    rmse = np.sqrt(np.mean(np.square(y_test_pred_position - y_test_true_position)))
+    print("Testing RMSE (Position after Integration):", rmse)
+    
+    # Plot results
     v_num = y_test_true.shape[1]
-    labels = ['leader '+str(int(v+1)) for v in range(v_num-1)]
+    labels = ['leader ' + str(int(v+1)) for v in range(v_num-1)]
     labels.append('follower')
     linestyles = ['-', '--', '-.', ':']
-    colors_gt = ['green' for v in range(v_num-1)]
-    colors_gt.append('blue')
-    colors_pred = ['orange' for v in range(v_num-1)]
-    colors_pred.append('red')
-
+    colors_gt = ['green' for v in range(v_num-1)] + ['blue']
+    colors_pred = ['orange' for v in range(v_num-1)] + ['red']
+    
     for i in range(1):
         fig = plt.figure(figsize=(8,5))
         for j in range(y_test_true.shape[1]):
-            plt.plot(y_test_true[i,j,:]*scale, color=colors_gt[j], label='Ground Truth - '+labels[j], linestyle=linestyles[j])
-            plt.plot(y_test_pred[i,j,:]*scale, color=colors_pred[j], label='Prediction - '+labels[j], linestyle=linestyles[j])
-        plt.ylabel('Longitudial Position (m)')
+            plt.plot(y_test_true_position[i, j, :], color=colors_gt[j], label='Ground Truth - ' + labels[j], linestyle=linestyles[j])
+            plt.plot(y_test_pred_position[i, j, :], color=colors_pred[j], label='Prediction - ' + labels[j], linestyle=linestyles[j])
+        plt.ylabel('Longitudinal Position (m)')
         plt.xlabel('Time (0.1s)')
         plt.legend()
         plt.show()
         fig.savefig('output/eval_'+str(i)+'.png', dpi=300)
-    return y_test_pred, y_test_true
 
+    return y_test_pred_position, y_test_true_position
 
 # Main Function
 def main():
@@ -321,7 +304,7 @@ def main():
     # Dataset and DataLoader setup
     data_path = 'data' 
     files = load_data(data_path)
-    X_train, y_train, X_val, y_val, X_test, y_test, scale = preprocess_data(files, input_time_dim=input_time_dim, output_time_dim=output_time_dim, len_d=100)
+    X_train, y_train, X_val, y_val, X_test, y_test, scale, initial_positions = preprocess_data(files, input_time_dim=input_time_dim, output_time_dim=output_time_dim, len_d=100)
     
     traindata = MyDataset(X_train, y_train)
     valdata = MyDataset(X_val, y_val)
@@ -337,14 +320,14 @@ def main():
     epoch = 100
     l_r = 5e-4
 
-    os.makedirs("model/CF_leader="+str(n_leader), exist_ok=True)
-    model_path = 'model/CF_leader='+str(n_leader)+"/"+model_name+"_M=" + str(input_time_dim) + "_N=" + str(output_time_dim) + ".pt"
+    os.makedirs("model_speed/CF_leader="+str(n_leader), exist_ok=True)
+    model_path = 'model_speed/CF_leader='+str(n_leader)+"/"+model_name+"_M=" + str(input_time_dim) + "_N=" + str(output_time_dim) + ".pt"
 
     print("Start training...")
     model, train_hist, test_hist = train_model(model, model_name, trainloader, valloader, epoch, l_r, scale, model_path, device)
     
     print("Start evaluation...")
-    predictions, actuals = evaluate_model(model_path, model_name, X_test, y_test, scale, device)
+    predictions, actuals = evaluate_model(model_path, model_name, X_test, y_test, scale, initial_positions, device)
 
 if __name__ == "__main__":
     main()
