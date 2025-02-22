@@ -25,7 +25,13 @@ Both versions leverage an LSTM network to process historical data and generate f
 ├── model_speed.py          # LSTM architecture for speed prediction
 ├── model/                  # Directory for saving trained position-based models
 ├── model_speed/            # Directory for saving trained speed-based models
-├── data/                   # Directory containing input data (not included in repo)
+├── platoon_data_processing/ # Folder for platoon data extraction and processing
+│   ├── platoon_data_processing.ipynb  # Jupyter notebook for processing NGSIM data
+│   ├── raw_data/            # Contains raw NGSIM datasets (I-80 and US-101)
+│   │   ├── I-80/            # I-80 highway trajectory data
+│   │   ├── US-101/          # US-101 highway trajectory data
+│   ├── processed_data/      # Folder storing processed platoon data
+├── data/                   # Directory containing additional input data (not included in repo)
 ├── output/                 # Directory for model outputs and evaluation plots
 ├── README.md               # Documentation
 ```
@@ -124,9 +130,27 @@ The models generate plots comparing predicted and actual trajectories. Evaluatio
 
 ---
 
-## 5. Future Improvements
-- Incorporate external factors like traffic signals.
-- Experiment with transformer-based sequence models.
-- Fine-tune loss functions for better motion constraints.
+## 5. Platoon Data Processing (`platoon_data_processing/`)
+### **Description**
+This module processes vehicle trajectory data from the **NGSIM dataset** to extract platoons of connected vehicles. The extracted platoon data serves as input for training and evaluating car-following models.
 
-For any questions, please open an issue or reach out! 🚀
+### **Steps in Data Processing**
+1. **Extract Vehicle Platoons**
+   - Identify vehicle groups based on a predefined platoon size.
+   - Ensure vehicles remain in the same lane and follow a leader-follower relationship.
+   - Filter out short-lived platoons based on a minimum time window.
+
+2. **Data Cleaning and Sorting**
+   - Sort trajectory data by **Frame_ID** and **Vehicle_ID**.
+   - Remove outliers where position jumps exceed a predefined threshold.
+
+3. **Generating Processed Data**
+   - Store cleaned trajectory sequences in `processed_data/`.
+   - Output standardized datasets for further training and evaluation.
+
+### **Usage Instructions**
+To process the raw data and extract platoons, run the Jupyter notebook:
+```bash
+jupyter notebook platoon_data_processing/platoon_data_processing.ipynb
+```
+The processed data will be saved in the `processed_data/` folder and can be used for training car-following models.
